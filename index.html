@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown → Exact Inline-Styled HTML</title>
+</head>
+<body style="margin:24px; font-family: Arial, sans-serif;">
+  <h1 style="font-size:20px; margin:0 0 12px 0;">Markdown → Exact Inline-Styled HTML (single file)</h1>
+
+  <label for="titleInput" style="display:block; font-size:14px; margin:12px 0 4px 0;">Notes Title</label>
+  <input id="titleInput" type="text" value="Notes Title"
+         style="width:100%; padding:8px; font-size:14px; border:1px solid #ccc; border-radius:6px;">
+
+  <label for="mdInput" style="display:block; font-size:14px; margin:16px 0 4px 0;">Markdown</label>
+  <textarea id="mdInput" rows="16" spellcheck="false"
+            style="width:100%; padding:8px; font-size:13px; line-height:1.4; border:1px solid #ccc; border-radius:6px;"></textarea>
+
+  <div style="margin-top:12px;">
+    <button id="convertBtn"
+            style="padding:8px 12px; font-size:14px; border:1px solid #11599F; background:#11599F; color:#fff; border-radius:6px; cursor:pointer;">
+      Convert
+    </button>
+    <button id="downloadBtn"
+            style="padding:8px 12px; font-size:14px; border:1px solid #444; background:#fff; color:#222; border-radius:6px; cursor:pointer; margin-left:8px;">
+      Download notes.html
+    </button>
+  </div>
+
+  <h2 style="font-size:16px; margin:20px 0 8px 0;">Preview</h2>
+  <iframe id="preview" title="preview" style="width:100%; height:420px; border:1px solid #ddd; border-radius:6px;"></iframe>
+
+  <h2 style="font-size:16px; margin:20px 0 8px 0;">Generated HTML (read-only)</h2>
+  <textarea id="htmlOut" rows="12" readonly
+            style="width:100%; padding:8px; font-size:12px; line-height:1.35; border:1px solid #ccc; border-radius:6px;"></textarea>
+
+  <script>
+    // Exact inline styles from your sample
+    const S = {
+      body:  'margin:40px;',
+      h1:    'font-family: Montserrat, Arial, sans-serif; font-size:45.33px; font-weight:700; line-height:62.56px; color:rgb(17,89,159); margin-top:0; margin-bottom:0;',
+      h2:    'font-family: Montserrat, Arial, sans-serif; font-size:24px; font-weight:700; line-height:36px; color:rgb(17,89,159); margin-top:24px; margin-bottom:0;',
+      h3:    'font-family: Montserrat, Arial, sans-serif; font-size:18.67px; font-weight:700; line-height:28px; color:rgb(17,89,159); margin-top:18.65px; margin-bottom:0;',
+      p16:   'font-family: Montserrat, Arial, sans-serif; font-size:16px; font-weight:400; line-height:24px; color:rgb(28,28,28); margin-top:16px; margin-bottom:0;',
+      p12b:  'font-family: Montserrat, Arial, sans-serif; font-size:16px; font-weight:700; line-height:24px; color:rgb(28,28,28); margin-top:12px; margin-bottom:0;',
+      p6:    'font-family: Montserrat, Arial, sans-serif; font-size:16px; font-weight:400; line-height:24px; color:rgb(28,28,28); margin-top:6px; margin-bottom:0;',
+      q:     'font-family: Montserrat, Arial, sans-serif; font-size:16px; font-weight:400; font-style:italic; line-height:24px; color:rgb(28,28,28); margin-top:16px; margin-bottom:0;',
+      ulTop: 'font-family: Montserrat, Arial, sans-serif; font-size:16px; color:rgb(28,28,28); list-style-type:square; margin-top:6px; margin-bottom:0; padding-left:20px;',
+      ulSub: 'list-style-type:circle; padding-left:20px;',
+      olTop: 'font-family: Montserrat, Arial, sans-serif; font-size:16px; color:rgb(28,28,28); list-style-type:decimal; margin-top:6px; margin-bottom:0; padding-left:20px;',
+      a:     'font-family: Montserrat, Arial, sans-serif; font-size:16px; color:rgb(17,89,159); text-decoration:underline;',
+      code:  "font-family:'docs-Source Code Pro',Arial; background-color:rgba(0,0,0,0.06); font-weight:400; font-size:16px; line-height:24px; color:rgb(28,28,28); padding:1px 3px; border-radius:3px;"
+    };
+
+    function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+    // Inline transforms for links, bold, italics, inline code
+    function inlineMdToHtml(txt){
+      // links [text](url)
+      txt = txt.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_,t,u)=>`<a href="${u}" style="${S.a}">${esc(t)}</a>`);
+      // strong **text**
+      txt = txt.replace(/\*\*([^*]+?)\*\*/g, (_,t)=>`<strong>${esc(t)}</strong>`);
+      // inline code `code`
+      txt = txt.replace(/`([^`]+)`/g, (_,t)=>`<span style="${S.code}">${esc(t)}</span>`);
+      // em *text* (not list markers)
+      txt = txt.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, (_,pre,t)=>`${pre}<em>${esc(t)}</em>`);
+      return txt;
+    }
+
+    // Parser tailored to your exact pattern
+    function toExactHtml(title, md){
+      const lines = md.replace(/\r\n/g,'\n').split('\n');
+      let out = [];
+      out.push('<!DOCTYPE html>','<html lang="en">','<head>','  <meta charset="UTF-8">','  <title>Notes</title>','</head>');
+      out.push(`<body style="${S.body}">`);
+      out.push(`<h1 style="${S.h1}">`,'  '+esc(title || 'Notes Title'),'</h1>');
+
+      let stack=[]; // {type:'ul'|'ol', indent:number, isTop:boolean}
+      let prevBoldOnly=false;
+
+      function closeLists(toIndent=-1){
+        while(stack.length && stack[stack.length-1].indent>toIndent){
+          out.push(stack.pop().type==='ul' ? '</ul>' : '</ol>');
+        }
+      }
+      function openUl(indent,isTop){
+        out.push(`<ul style="${isTop?S.ulTop:S.ulSub}">`);
+        stack.push({type:'ul',indent,isTop});
+      }
+      function openOl(indent){
+        out.push(`<ol style="${S.olTop}">`);
+        stack.push({type:'ol',indent,isTop:true});
+      }
+
+      for(let i=0;i<lines.length;i++){
+        let raw=lines[i];
+        if(/^\s*$/.test(raw)){prevBoldOnly=false;continue;}
+
+        // Normalize headings without space after ##
+        raw = raw.replace(/^##([^#\s].*)$/,'## $1');
+
+        // H2 "##"
+        let m = raw.match(/^##\s+(.*)$/);
+        if(m){
+          closeLists();
+          out.push(`<h2 style="${S.h2}">`,'  '+esc(m[1].trim()),'</h2>');
+          prevBoldOnly=false; continue;
+        }
+        // H3 "###"
+        m = raw.match(/^###\s+(.*)$/);
+        if(m){
+          closeLists();
+          out.push(`<h3 style="${S.h3}">`,'  '+esc(m[1].trim()),'</h3>');
+          prevBoldOnly=false; continue;
+        }
+        // Ordered list: "1. text"
+        m = raw.match(/^(\s*)(\d+)\.\s+(.*)$/);
+        if(m){
+          const indent=m[1].length, text=m[3];
+          // open/adjust OL
+          if(!stack.length || stack[stack.length-1].type!=='ol'){
+            closeLists(-1); openOl(indent);
+          }else{
+            const cur=stack[stack.length-1].indent;
+            if(indent>cur){ openOl(indent); }
+            else if(indent<cur){ closeLists(indent); if(!stack.length||stack[stack.length-1].type!=='ol') openOl(indent); }
+          }
+          out.push(`  <li>${inlineMdToHtml(text.trim())}</li>`);
+          prevBoldOnly=false; continue;
+        }
+        // Unordered list: "* " or "- "
+        m = raw.match(/^(\s*)([*-])\s+(.*)$/);
+        if(m){
+          const indent=m[1].length, text=m[3];
+          if(!stack.length || stack[stack.length-1].type!=='ul'){
+            closeLists(-1); openUl(indent,true);
+          }else{
+            const top=stack[stack.length-1].indent;
+            if(indent>top){ openUl(indent,false); }
+            else if(indent<top){ closeLists(indent); if(!stack.length||stack[stack.length-1].type!=='ul') openUl(indent,true); }
+          }
+          out.push(`  <li>${inlineMdToHtml(text.trim())}</li>`);
+          prevBoldOnly=false; continue;
+        }
+
+        // Not a list item: close open lists
+        closeLists();
+
+        const trimmed=raw.trim();
+
+        // Quote line: *"quote"*  or *quote*
+        let q = trimmed.match(/^\*([^*]+)\*$/);
+        if(q){
+          out.push(`<p style="${S.q}">`,'  '+esc(q[1].trim().replace(/^"+|"+$/g,'')),'</p>');
+          prevBoldOnly=false; continue;
+        }
+
+        // Bold-only line -> sub-subsection paragraph style
+        let b = trimmed.match(/^\*\*([^*]+)\*\*$/);
+        if(b){
+          out.push(`<p style="${S.p12b}">`,'  '+esc(b[1].trim()),'</p>');
+          prevBoldOnly=true; continue;
+        }
+
+        // Normal paragraph with spacing depending on previous bold-only
+        out.push(`<p style="${prevBoldOnly?S.p6:S.p16}">`,'  '+inlineMdToHtml(trimmed),'</p>');
+        prevBoldOnly=false;
+      }
+      closeLists();
+      out.push('</body>','</html>');
+      return out.join('\n');
+    }
+
+    // Wire up UI
+    const mdInput=document.getElementById('mdInput');
+    const titleInput=document.getElementById('titleInput');
+    const htmlOut=document.getElementById('htmlOut');
+    const preview=document.getElementById('preview');
+    const convertBtn=document.getElementById('convertBtn');
+    const downloadBtn=document.getElementById('downloadBtn');
+    let lastHtml='';
+
+    function render(){
+      lastHtml = toExactHtml(titleInput.value, mdInput.value);
+      htmlOut.value = lastHtml;
+      const blob = new Blob([lastHtml], {type:'text/html'});
+      const url = URL.createObjectURL(blob);
+      preview.src = url;
+      preview.onload = () => setTimeout(()=>URL.revokeObjectURL(url),500);
+    }
+    convertBtn.addEventListener('click', render);
+    downloadBtn.addEventListener('click', ()=>{
+      if(!lastHtml) render();
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([lastHtml],{type:'text/html'}));
+      a.download='notes.html';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href); document.body.removeChild(a);},500);
+    });
+
+    // Preload your sample for quick verification
+    mdInput.value =
+`##Context
+This section describes the context (e.g. why the research was done).
+
+## Section 1
+Here is a section with some text. Use **bold** and *italics* to emphasize and make more readable. Here is a [link](www.example.com).
+
+Inline code example: \`let x = 10;\`
+
+## Section 2
+Here is another section with bullet points:
+* **Bullet 1:** Some text
+* **Bullet 2:** Some other text
+   * Nested bullet point
+Here is a numbered list:
+1. Item 1
+2. Item 2
+
+## Section 3
+Here is a section with subsections.
+
+### Subsection
+Here is a subsection with a further sub-subsection.
+**Sub-subsection**
+Here is a sub-subsection
+
+## Section 4
+Here is a section with a quote
+*"This is a quote"*
+
+## Links
+Here are some links:
+* [Link to Useful Website](www.useful-website.com)`;
+    titleInput.value='Notes Title';
+    render();
+  </script>
+</body>
+</html>
