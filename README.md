@@ -6,14 +6,16 @@ Paste Markdown, click **Convert**, check the preview, then use **Copy formatted 
 
 ## Formatting
 
-- `#`: large blue Purpose/Process style (24px).
-- `##`: smaller blue step style (18.67px).
-- `###`: black bold substep style (16px).
+- `#`: large blue Purpose/Process style (24px), using the editor’s Heading tag (`h2`).
+- `##`: smaller blue step style (14pt), using the editor’s Subheading tag (`h3`).
+- `###`: black bold normal paragraph (16px).
 - Both `**bold**` and `__bold__` work. Both `*italic*` and `_italic_` work.
 - Inline backticks are removed and their contents become normal text.
 - Bullets, numbered lists, nested lists, paragraphs, and links are supported.
 - Deeper headings, tables, code blocks, quotes, images, HTML tags, checkboxes, strikethrough, and divider lines show errors.
 - Standard Markdown has no underline syntax, so there is no custom underline mode.
+
+Output uses 1.5 line spacing, with a paragraph inside each list item and 6px between list items, matching the website template.
 
 Montserrat is used when available, with Arial as the fallback. Copying rich text requires browser support; the page also provides a manual selection option.
 

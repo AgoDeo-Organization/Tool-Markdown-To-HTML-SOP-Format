@@ -120,13 +120,13 @@ OTHER DEALINGS IN THE SOFTWARE.
     // Template styles: Purpose, Step 1, Step 2.A, and normal text.
     const FONT = 'font-family:Montserrat,Arial,sans-serif;';
     const S = {
-      h1: FONT + 'font-size:24px;font-weight:700;line-height:36px;color:#11599f;margin:24px 0 0;',
-      h2: FONT + 'font-size:18.67px;font-weight:700;line-height:28px;color:#11599f;margin:18.67px 0 0;',
-      h3: FONT + 'font-size:16px;font-weight:700;line-height:24px;color:#000;margin:16px 0 0;',
-      p: FONT + 'font-size:16px;font-weight:400;line-height:24px;color:#000;margin:16px 0 0;',
-      ul: FONT + 'font-size:16px;line-height:24px;color:#000;list-style-type:square;margin:6px 0 0;padding-left:20px;',
-      ol: FONT + 'font-size:16px;line-height:24px;color:#000;list-style-type:decimal;margin:6px 0 0;padding-left:20px;',
-      li: FONT + 'font-size:16px;line-height:24px;color:#000;',
+      h1: FONT + 'font-size:24px;font-weight:700;line-height:1.5;color:#11599f;margin:24px 0 0;',
+      h2: FONT + 'font-size:14pt;font-weight:700;line-height:1.5;color:#11599f;margin:14pt 0 0;',
+      h3: FONT + 'font-size:16px;font-weight:700;line-height:1.5;color:#000;margin:16px 0 0;',
+      p: FONT + 'font-size:16px;font-weight:400;line-height:1.5;color:#000;margin:16px 0 0;',
+      ul: FONT + 'font-size:16px;line-height:1.5;color:#000;list-style-type:square;margin:6px 0 0;padding:0;',
+      ol: FONT + 'font-size:16px;line-height:1.5;color:#000;list-style-type:decimal;margin:6px 0 0;padding:0;',
+      li: FONT + 'font-size:16px;line-height:1.5;color:#000;margin:6px 0 0 20px;',
       a: 'color:#11599f;text-decoration:underline;',
       strong: 'font-weight:700;',
       em: 'font-style:italic;'
@@ -202,12 +202,32 @@ OTHER DEALINGS IN THE SOFTWARE.
 
       // Style tokens without rewriting their text, so nested formatting stays intact.
       function style(items) {
-        for (const token of items) {
+        for (const [i, token] of items.entries()) {
           if (token.nesting === 1 && S[token.tag]) token.attrSet('style', S[token.tag]);
+          if (i === 0 && token.type === 'heading_open') {
+            token.attrSet('style', token.attrGet('style') + 'margin-top:0;');
+          }
+          // The editor uses a paragraph inside each list item, even for tight lists.
+          if (token.type === 'paragraph_open' || token.type === 'paragraph_close') token.hidden = false;
+          if (token.type === 'paragraph_open' && items[i - 1]?.type === 'list_item_open') {
+            token.attrSet('style', S.p.replace('margin:16px 0 0;', 'margin:0;'));
+          }
+          if (token.type === 'list_item_open' && ['bullet_list_open', 'ordered_list_open'].includes(items[i - 1]?.type)) {
+            token.attrSet('style', S.li.replace('margin:6px', 'margin:0'));
+          }
           if (token.children) style(token.children);
         }
       }
       style(tokens);
+      // Google Sites calls h1 "Title". Match its native heading and paragraph tags.
+      const headingTags = {h1: 'h2', h2: 'h3', h3: 'p'};
+      parser.renderer.rules.heading_open = (items, i) => {
+        const token = items[i];
+        return `<${headingTags[token.tag]} style="${token.attrGet('style')}">` +
+          (token.tag === 'h3' ? '<strong style="font-weight:700;">' : '');
+      };
+      parser.renderer.rules.heading_close = (items, i) =>
+        (items[i].tag === 'h3' ? '</strong>' : '') + `</${headingTags[items[i].tag]}>\n`;
       // Inline backticks keep their contents as ordinary, safely escaped text.
       parser.renderer.rules.code_inline = (items, i) => escapeHtml(items[i].content);
       const fragment = parser.renderer.render(tokens, parser.options, {});
